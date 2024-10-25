@@ -1,0 +1,53 @@
+.content {
+    margin: 8px auto;
+    width: 1152px;
+    padding: 20px;
+}
+
+.filters {
+    margin: 8px auto;
+    width: 1152px;
+    padding: 20px;
+}
+
+.content {
+    min-height: 500px;
+}
+
+.graph_dep {
+    text-align: center;
+}
+
+.footer {
+    text-align: center;
+}
+
+.footer svg {
+    padding-left: 2px;
+}
+
+.copyright {
+    font-size: xx-small;
+    color: gray;
+}
+
+.solifd {
+    border-top: 3px solid #bbb;
+    padding-top: 20px;
+    padding-bottom: 20px;
+}
+
+.space {
+    height: 20px;
+}
+
+.spacePadding {
+    padding-top: 20px;
+}
+
+.inputLevel2 {
+    width: 100px;
+}
+.used {
+    background-color: green;
+}

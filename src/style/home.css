@@ -2,16 +2,21 @@
     margin: 8px auto;
     width: 1152px;
     padding: 20px;
+    min-height: 500px;
 }
 
-.filters {
+.pageStandard {
     margin: 8px auto;
     width: 1152px;
     padding: 20px;
 }
 
-.content {
-    min-height: 500px;
+.depAnalyse {
+    padding: 64px;
+}
+
+.startAnalysis_btn {
+    text-align: center;
 }
 
 .graph_dep {
@@ -40,6 +45,9 @@
 .space {
     height: 20px;
 }
+.horizontal_space {
+    width: 20px;
+}
 
 .spacePadding {
     padding-top: 20px;
@@ -50,4 +58,11 @@
 }
 .used {
     background-color: green;
+}
+.grey_dependency {
+    background-color: #E9EAEC;
+    padding: 12px
+}
+.white_dependency {
+    padding: 5px 
 }

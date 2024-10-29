@@ -1,16 +1,16 @@
-import { Component } from 'react';
+import React, { Component } from 'react';
 import "../style/home.css";
 import { Divider } from 'primereact/divider';
 import "primereact/resources/themes/lara-light-indigo/theme.css";
 import "primereact/resources/primereact.min.css";
 import "primeicons/primeicons.css";
 import { DataScroller } from 'primereact/datascroller';
+import { Button } from 'primereact/button';
 import Graph from './graph';
 
 const docRoutes = require("../routes/routes");
 
 export class Home extends Component {
-
     constructor(props) {
         super(props);
         this.state = {
@@ -21,6 +21,7 @@ export class Home extends Component {
             url: docRoutes.getData(),
             url2: docRoutes.getComponentinfo(),
             url3: docRoutes.getDepentComponent(),
+            selectDocs: []  // Initialize selectDocs in state
         };
     }
 
@@ -47,49 +48,112 @@ export class Home extends Component {
             const data3 = await res3.json();
             this.setState({ filteredDocs: data3 });
 
-            this.setState({ componentId: data2 }, () => {
-                console.log("Updated componentId state:", this.state.componentId);
-            });
-
+            this.setState({ componentId: data2 });
         } catch (error) {
             console.error("Error fetching data:", error);
         }
     }
 
-    // Extract groupId from each object in filteredDocs
-    getGroupIds() {
-        return this.state.filteredDocs.map(doc => doc.dependency);
-    }
+    // Add doc to selected docs list and trigger re-render
+    addDocToSelection = (doc) => {
+        this.setState((prevState) => ({
+            selectDocs: [...prevState.selectDocs, doc]
+        }));
+    };
+
+    removeDocFromSelection = (docToRemove) => {
+        this.setState((prevState) => ({
+            selectDocs: prevState.selectDocs.filter(doc => doc !== docToRemove)  // Remove the selected doc
+        }));
+    };
+
+    startAnalysis = async () => {
+        const response = await fetch("http://localhost:1337/analyze", {
+            method: "PUT",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify(this.state.selectDocs)
+        });
+
+        if (response.ok) {
+            this.pollProgress();
+        } else {
+            console.error("Analysis request failed");
+        }
+    };
+
+    // Poll the server to retrieve progress updates (you might also use WebSockets)
+    pollProgress = () => {
+        this.progressInterval = setInterval(async () => {
+            const response = await fetch("http://localhost:1337/progress");
+            const { progress } = await response.json();
+            this.setState({ progress });
+
+            if (progress === 100) {
+                clearInterval(this.progressInterval);
+            }
+        }, 1000);
+    };
+
 
     // Render the docs in a table or message if no docs found
-    tableDocs(data) {
-        if (!data || data.length === 0) {
-            return (
-                <div className="container">
-                    <p>No dependencies found.</p>
-                </div>
-            );
-        }
+    tableDocs = (data) => {
+        const isSelected = this.state.selectDocs.some(doc => doc.name === data.name);
+        // Define button styles based on selection state
+        const buttonStyle = {
+            backgroundColor: isSelected ? 'green' : 'blue', // Green when selected, blue otherwise
+            color: 'white', // Text color
+            border: 'none', // Remove default border
+            cursor: 'pointer', // Pointer cursor on hover
+            borderRadius: '10%'
+        };
+
         return (
             <div className="container">
-                <div className="row">
-                    <div className="col">
-                        {data?.base_dir || 'No Dependency'}
+                <div className="row grey_dependency">
+                    <div className="col-3">
+                        {data?.name || 'Empty'}
                     </div>
-                    {data.maven_analyse_used
-                        ? <div className="col-3 used">
-                            Used
-                        </div> : <div className="col-3 notused">
-                            Not used
-                        </div>}
+                    <div className="col">
+                        {data?.base_dir || 'Empty'}
+                    </div>
+                    <div className='col-1'>
+                        <Button
+                            label=""
+                            style={buttonStyle}
+                            icon={isSelected ? "pi pi-check" : "pi pi-plus"}
+                            color='black'
+                            onClick={() => {
+                                if (!isSelected) {
+                                    this.addDocToSelection(data);
+                                    this.refreshDocList();
+                                }
+                            }}
+                            disabled={isSelected}  // Disable button if selected
+                        />
+                    </div>
+                </div>
+                <div className='row white_dependency'>
+                    <p></p>
                 </div>
             </div>
         );
-    }
+    };
+
 
     render() {
-        //const groupIds = this.getGroupIds();  // Extract the groupId array
         const { docs, filteredDocs, keyword } = this.state;
+        const buttonStyleRemove = {
+            backgroundColor: 'red', // Green when selected, blue otherwise
+            color: 'white', // Text color
+            border: 'none', // Remove default border
+            cursor: 'pointer', // Pointer cursor on hover
+            borderRadius: '10%'
+        };
+        const buttonStyleSearch = {
+            with: '40px',
+            height: '40px',
+            borderRadius: '50%'
+        }
 
         return (
             <>
@@ -99,65 +163,50 @@ export class Home extends Component {
                     </div>
                 </nav>
 
-                <div className='filters'>
-                    <div className='component'>
-                        <h5>Component:</h5>
-                        <p> - GroupId:<b> {this.state.componentId["group_id"]}</b></p>
-                        <p> - ArtifactId:<b> {this.state.componentId["artifact_id"]}</b></p>
-                        <p> - Root path:<b> {this.state.componentId["dir"]}</b></p>
-                    </div>
-                    <div className='space'></div>
-
-                    <h5>Filters dependencies</h5>
+                <div className='pageStandard'>
+                    <h5>Components</h5>
                     <Divider />
                     <div className='space'></div>
-                    {/*search bar for using ipas key*/}
                     <div>
                         <div className="container">
                             <div className="row">
-                                <div className="col-6">
-                                    <form
-                                        onSubmit={async (event) => {
-                                            event.preventDefault();
-
-                                            if (!keyword.trim()) {
-                                                alert("Please enter a keyword before validating.");
-                                                return;
-                                            }
-
-                                            await this.setState({
-                                                url: docRoutes.getDataBykeyword(keyword)
+                                <div className="col-8 d-flex align-items-center">
+                                    <label htmlFor="title">Enter a keyword </label>
+                                    <input
+                                        type="text"
+                                        className="form-control mr-2"
+                                        id="ex3"
+                                        placeholder="e.g., recharge-battery"
+                                        value={keyword}
+                                        onChange={async (event) => {
+                                            this.setState({
+                                                keyword: event.target.value
                                             });
-                                            this.refreshDocList();
                                         }}
-                                    >
-                                        <label htmlFor="title">Enter a keyword </label>
-                                        <p>
-                                            <input
-                                                type="text"
-                                                className="form-control"
-                                                id="ex3"
-                                                placeholder="e.g., soa-rbc"
-                                                value={keyword}
-                                                onChange={async (event) => {
-                                                    this.setState({
-                                                        keyword: event.target.value
-                                                    });
-                                                }}
-                                            />
-                                        </p>
-                                        <p>
-                                            {/* Disable button if docs array is empty */}
-                                            <input
-                                                type="submit"
-                                                value="validate"
-                                                disabled={docs.length === 0}  // Disable button if docs is empty
-                                            />
-                                        </p>
-                                    </form>
+                                    />
+                                    <div className='horizontal_space'></div>
+                                    <Button
+                                        icon="pi pi-search"
+                                        className='p-button-primary'
+                                        style={buttonStyleSearch}
+                                        onClick={
+                                            async (event) => {
+                                                event.preventDefault();
+                                                if (!keyword.trim()) {
+                                                    alert("Please enter a keyword before searching.");
+                                                    return;
+                                                }
+                                                await this.setState({
+                                                    url: docRoutes.getDataBykeyword(keyword)
+                                                });
+                                                this.refreshDocList();
+                                            }
+                                        }
+                                        disabled={docs.length === 0} // Disable button if docs is empty
+                                    />
+
                                 </div>
                             </div>
-                            <div className='space'></div>
                         </div>
                     </div>
                     <div className='space'></div>
@@ -166,21 +215,83 @@ export class Home extends Component {
                     <div className="datascroller-demo">
                         <div className="card">
                             {docs.length > 0 ? (
-                                <DataScroller value={docs} className="\
-                                sep" itemTemplate={this.tableDocs} rows={500} id="\
-                                sep" inline scrollHeight="480px" header="List of dependencies" />
+                                <DataScroller
+                                    value={docs}
+                                    className="sep"
+                                    itemTemplate={this.tableDocs}
+                                    rows={500}
+                                    inline
+                                    scrollHeight="600px"
+                                    header="List of components"
+                                />
                             ) : (
-                                <p>No dependencies found.</p>  // Show message if docs are empty
+                                <p>No components found.</p>  // Show message if docs are empty
                             )}
                         </div>
                     </div>
+                    <div className='space'></div>
                 </div>
 
-                <div className='graph_dep content'>
+                <div className='depAnalyse pageStandard'>
+                    <h5>Dependency analysis</h5>
+                    <Divider />
+                    <div style={{ maxHeight: '500px', overflowY: 'scroll' }}>
+                        <table className="table">
+                            <thead>
+                                <tr>
+                                    <th>Name</th>
+                                    <th>Base Directory</th>
+                                    <th>Action</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {this.state.selectDocs.length > 0 ? (
+                                    this.state.selectDocs.map((doc, index) => (
+                                        <tr key={index}>
+                                            <td>{doc.name}</td>
+                                            <td>{doc.base_dir}</td>
+                                            <td>
+                                                <Button
+                                                    label=""
+                                                    style={buttonStyleRemove}
+                                                    icon="pi pi-trash"
+                                                    onClick={() => {
+                                                        this.removeDocFromSelection(doc);
+                                                        this.refreshDocList();
+                                                    }}
+                                                />
+                                            </td>
+                                        </tr>
+                                    ))
+                                ) : (
+                                    <tr>
+                                        <td colSpan="3">No selected documents.</td>
+                                    </tr>
+                                )}
+                            </tbody>
+                        </table>
+                    </div>
+                    <div className='startAnalysis_btn'>
+                        <Button
+                            label="Start Analysis"
+                            onClick={this.startAnalysis}
+                            style={{ width: '50%', marginTop: '10px' }} // Full width button
+                        />
+                    </div>
+                    <div className='progressBar'>
+                        {this.state.progress !== null && (
+                            <div className="progress-bar">
+                                <div style={{ width: `${this.state.progress}%` }}></div>
+                            </div>
+                        )}
+                    </div>
+                </div>
+
+                <div className='graph_dep pageStandard'>
                     {filteredDocs.length > 0 ? (
                         <Graph centralNode={this.state.componentId["artifact_id"]} nodes={filteredDocs} />
                     ) : (
-                        <p>No dependencies found to visualize.</p>  // Show message if no nodes for graph
+                        <p>No dependencies found to visualize.</p>
                     )}
                 </div>
                 <Divider />

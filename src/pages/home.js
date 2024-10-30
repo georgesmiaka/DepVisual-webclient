@@ -7,6 +7,7 @@ import "primeicons/primeicons.css";
 import { DataScroller } from 'primereact/datascroller';
 import { Button } from 'primereact/button';
 import Graph from './graph';
+import { ProgressSpinner } from 'primereact/progressspinner';
 
 const docRoutes = require("../routes/routes");
 
@@ -22,13 +23,16 @@ export class Home extends Component {
             url2: docRoutes.getComponentinfo(),
             url3: docRoutes.getDepentComponent(),
             selectDocs: [],  // Initialize selectDocs in state
-            progress: 0
+            progress: null,
+            circularProgress:false,
         };
+        this.progressInterval = null;
     }
 
     async componentDidMount() {
         this.refreshDocList();
     }
+
 
     async refreshDocList() {
         if (!this.state.url) {
@@ -74,27 +78,32 @@ export class Home extends Component {
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify(this.state.selectDocs)
         });
-
+    
         if (response.ok) {
             this.pollProgress();
         } else {
             console.error("Analysis request failed");
         }
     };
-
-    // Poll the server to retrieve progress updates (you might also use WebSockets)
+    
     pollProgress = () => {
         this.progressInterval = setInterval(async () => {
-            const response = await fetch("http://localhost:1337/progress");
-            const { progress } = await response.json();
-            this.setState({ progress });
-
-            if (progress === 100) {
+            try {
+                const response = await fetch("http://localhost:1337/progress");
+                const data = await response.json(); // Ensure correct destructuring
+                this.setState({ progress: data.progress }); // Set progress correctly
+    
+                if (data.progress === 100) {
+                    clearInterval(this.progressInterval);
+                    this.setState({circularProgress: false})
+                }
+            } catch (error) {
+                console.error("Error fetching progress:", error);
                 clearInterval(this.progressInterval);
             }
-        }, 1000); // Poll every second
+        }, 1000);
     };
-
+    
 
     // Render the docs in a table or message if no docs found
     tableDocs = (data) => {
@@ -273,18 +282,52 @@ export class Home extends Component {
                         </table>
                     </div>
                     <div className='startAnalysis_btn'>
-                        <Button
+                        {this.state.circularProgress ?
+                        (
+                            <Button
+                            className="p-button-secondary" // PrimeReact button color
+                            style={{ width: '50%', marginTop: '10px', height: '58px', cursor: 'not-allowed' }}
+                            disabled
+                        >
+                            <ProgressSpinner 
+                                style={{ width: '24px', height: '24px' }} 
+                                strokeWidth="4" 
+                                fill="var(--surface-ground)" 
+                                animationDuration=".5s" 
+                            />
+                        </Button>  
+                        ) : (
+                            <Button
                             label="Start Analysis"
-                            onClick={this.startAnalysis}
+                            onClick={() => {
+                                if (this.state.selectDocs.length === 0) {
+                                    alert("Please select a component before analyzing.");
+                                    return;
+                                }
+                                this.startAnalysis(); 
+                                this.setState({ circularProgress: true})
+                            }}
                             style={{ width: '50%', marginTop: '10px' }} // Full width button
                         />
+                        )
+                    }
+                        
                     </div>
+                    <div className='space'></div>
                     <div className='progressBar'>
                         {this.state.progress !== null && (
-                            <div className="progress-bar">
-                                <div style={{ width: `${this.state.progress}%` , color: 'black'}}></div>
+                            <div className="progress-bar" style={{ width: '100%', marginTop: '10px', border: '1px solid #ccc' }}>
+                                <div
+                                    style={{
+                                        width: `${this.state.progress}%`,
+                                        backgroundColor: this.state.progress < 50 ? 'red' : this.state.progress < 100 ? 'yellow' : 'green',
+                                        height: '15px',
+                                        transition: 'width 0.3s ease'
+                                    }}
+                                />
                             </div>
                         )}
+
                     </div>
                 </div>
 

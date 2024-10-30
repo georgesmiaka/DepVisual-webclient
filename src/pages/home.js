@@ -1,9 +1,13 @@
 import React, { Component } from 'react';
 import "../style/home.css";
 import { Divider } from 'primereact/divider';
+import "primereact/resources/themes/lara-light-indigo/theme.css";
+import "primereact/resources/primereact.min.css";
+import "primeicons/primeicons.css";
 import { DataScroller } from 'primereact/datascroller';
 import { Button } from 'primereact/button';
 import Graph from './graph';
+
 const docRoutes = require("../routes/routes");
 
 export class Home extends Component {
@@ -17,10 +21,9 @@ export class Home extends Component {
             url: docRoutes.getData(),
             url2: docRoutes.getComponentinfo(),
             url3: docRoutes.getDepentComponent(),
-            selectDocs: [],
-            progress: null // Initialize progress to null
+            selectDocs: [],  // Initialize selectDocs in state
+            progress: 0
         };
-        this.progressInterval = null; // Initialize as null to store interval reference
     }
 
     async componentDidMount() {
@@ -44,12 +47,15 @@ export class Home extends Component {
 
             const res3 = await fetch(this.state.url3);
             const data3 = await res3.json();
-            this.setState({ filteredDocs: data3, componentId: data2 });
+            this.setState({ filteredDocs: data3 });
+
+            this.setState({ componentId: data2 });
         } catch (error) {
             console.error("Error fetching data:", error);
         }
     }
 
+    // Add doc to selected docs list and trigger re-render
     addDocToSelection = (doc) => {
         this.setState((prevState) => ({
             selectDocs: [...prevState.selectDocs, doc]
@@ -58,7 +64,7 @@ export class Home extends Component {
 
     removeDocFromSelection = (docToRemove) => {
         this.setState((prevState) => ({
-            selectDocs: prevState.selectDocs.filter(doc => doc !== docToRemove)
+            selectDocs: prevState.selectDocs.filter(doc => doc !== docToRemove)  // Remove the selected doc
         }));
     };
 
@@ -76,30 +82,29 @@ export class Home extends Component {
         }
     };
 
+    // Poll the server to retrieve progress updates (you might also use WebSockets)
     pollProgress = () => {
         this.progressInterval = setInterval(async () => {
-            try {
-                const response = await fetch("http://localhost:1337/progress");
-                const { progress } = await response.json();
-                this.setState({ progress });
+            const response = await fetch("http://localhost:1337/progress");
+            const { progress } = await response.json();
+            this.setState({ progress });
 
-                if (progress === 100) {
-                    clearInterval(this.progressInterval); // Clear interval once analysis completes
-                }
-            } catch (error) {
-                console.error("Error fetching progress:", error);
-                clearInterval(this.progressInterval); // Stop polling on error
+            if (progress === 100) {
+                clearInterval(this.progressInterval);
             }
-        }, 1000);
+        }, 1000); // Poll every second
     };
 
+
+    // Render the docs in a table or message if no docs found
     tableDocs = (data) => {
         const isSelected = this.state.selectDocs.some(doc => doc.name === data.name);
+        // Define button styles based on selection state
         const buttonStyle = {
-            backgroundColor: isSelected ? 'green' : 'blue',
-            color: 'white',
-            border: 'none',
-            cursor: 'pointer',
+            backgroundColor: isSelected ? 'green' : 'blue', // Green when selected, blue otherwise
+            color: 'white', // Text color
+            border: 'none', // Remove default border
+            cursor: 'pointer', // Pointer cursor on hover
             borderRadius: '10%'
         };
 
@@ -117,24 +122,39 @@ export class Home extends Component {
                             label=""
                             style={buttonStyle}
                             icon={isSelected ? "pi pi-check" : "pi pi-plus"}
+                            color='black'
                             onClick={() => {
                                 if (!isSelected) {
                                     this.addDocToSelection(data);
                                     this.refreshDocList();
                                 }
                             }}
-                            disabled={isSelected}
+                            disabled={isSelected}  // Disable button if selected
                         />
                     </div>
+                </div>
+                <div className='row white_dependency'>
+                    <p></p>
                 </div>
             </div>
         );
     };
 
+
     render() {
-        const { docs, filteredDocs, keyword, progress } = this.state;
-        const buttonStyleRemove = { backgroundColor: 'red', color: 'white', border: 'none', cursor: 'pointer', borderRadius: '10%' };
-        const buttonStyleSearch = { width: '40px', height: '40px', borderRadius: '50%' };
+        const { docs, filteredDocs, keyword } = this.state;
+        const buttonStyleRemove = {
+            backgroundColor: 'red', // Green when selected, blue otherwise
+            color: 'white', // Text color
+            border: 'none', // Remove default border
+            cursor: 'pointer', // Pointer cursor on hover
+            borderRadius: '10%'
+        };
+        const buttonStyleSearch = {
+            with: '40px',
+            height: '40px',
+            borderRadius: '50%'
+        }
 
         return (
             <>
@@ -147,91 +167,139 @@ export class Home extends Component {
                 <div className='pageStandard'>
                     <h5>Components</h5>
                     <Divider />
-                    <div className="container">
-                        <div className="row">
-                            <div className="col-8 d-flex align-items-center">
-                                <label htmlFor="title">Enter a keyword </label>
-                                <input
-                                    type="text"
-                                    className="form-control mr-2"
-                                    id="ex3"
-                                    placeholder="e.g., recharge-battery"
-                                    value={keyword}
-                                    onChange={(event) => this.setState({ keyword: event.target.value })}
-                                />
-                                <Button
-                                    icon="pi pi-search"
-                                    style={buttonStyleSearch}
-                                    onClick={() => {
-                                        if (keyword.trim()) {
-                                            this.setState({ url: docRoutes.getDataBykeyword(keyword) });
-                                            this.refreshDocList();
+                    <div className='space'></div>
+                    <div>
+                        <div className="container">
+                            <div className="row">
+                                <div className="col-8 d-flex align-items-center">
+                                    <label htmlFor="title">Enter a keyword </label>
+                                    <input
+                                        type="text"
+                                        className="form-control mr-2"
+                                        id="ex3"
+                                        placeholder="e.g., recharge-battery"
+                                        value={keyword}
+                                        onChange={async (event) => {
+                                            this.setState({
+                                                keyword: event.target.value
+                                            });
+                                        }}
+                                    />
+                                    <div className='horizontal_space'></div>
+                                    <Button
+                                        icon="pi pi-search"
+                                        className='p-button-primary'
+                                        style={buttonStyleSearch}
+                                        onClick={
+                                            async (event) => {
+                                                event.preventDefault();
+                                                if (!keyword.trim()) {
+                                                    alert("Please enter a keyword before searching.");
+                                                    return;
+                                                }
+                                                await this.setState({
+                                                    url: docRoutes.getDataBykeyword(keyword)
+                                                });
+                                                this.refreshDocList();
+                                            }
                                         }
-                                    }}
-                                    disabled={!docs.length}
-                                />
+                                        disabled={docs.length === 0} // Disable button if docs is empty
+                                    />
+
+                                </div>
                             </div>
                         </div>
                     </div>
+                    <div className='space'></div>
                 </div>
-
                 <div className='content bg-light'>
-                    <DataScroller value={docs} className="sep" itemTemplate={this.tableDocs} rows={500} inline scrollHeight="600px" header="List of components" />
+                    <div className="datascroller-demo">
+                        <div className="card">
+                            {docs.length > 0 ? (
+                                <DataScroller
+                                    value={docs}
+                                    className="sep"
+                                    itemTemplate={this.tableDocs}
+                                    rows={500}
+                                    inline
+                                    scrollHeight="600px"
+                                    header="List of components"
+                                />
+                            ) : (
+                                <p>No components found.</p>  // Show message if docs are empty
+                            )}
+                        </div>
+                    </div>
+                    <div className='space'></div>
                 </div>
 
                 <div className='depAnalyse pageStandard'>
                     <h5>Dependency analysis</h5>
                     <Divider />
-                    <table className="table">
-                        <thead>
-                            <tr><th>Name</th><th>Base Directory</th><th>Action</th></tr>
-                        </thead>
-                        <tbody>
-                            {this.state.selectDocs.map((doc, index) => (
-                                <tr key={index}>
-                                    <td>{doc.name}</td>
-                                    <td>{doc.base_dir}</td>
-                                    <td>
-                                        <Button
-                                            label=""
-                                            style={buttonStyleRemove}
-                                            icon="pi pi-trash"
-                                            onClick={() => {
-                                                this.removeDocFromSelection(doc);
-                                                this.refreshDocList();
-                                            }}
-                                        />
-                                    </td>
+                    <div style={{ maxHeight: '500px', overflowY: 'scroll' }}>
+                        <table className="table">
+                            <thead>
+                                <tr>
+                                    <th>Name</th>
+                                    <th>Base Directory</th>
+                                    <th>Action</th>
                                 </tr>
-                            ))}
-                        </tbody>
-                    </table>
-                    <Button
-                        label="Start Analysis"
-                        onClick={this.startAnalysis}
-                        style={{ width: '50%', marginTop: '10px' }}
-                    />
-                    {progress !== null && (
-                        <div className="progress-bar" style={{ width: '100%', marginTop: '10px', border: '1px solid #ccc' }}>
-                            <div
-                                style={{
-                                    width: `${progress}%`,
-                                    backgroundColor: progress < 50 ? 'red' : progress < 100 ? 'yellow' : 'green',
-                                    height: '10px',
-                                    transition: 'width 0.3s ease'
-                                }}
-                            />
-                        </div>
-                    )}
-
+                            </thead>
+                            <tbody>
+                                {this.state.selectDocs.length > 0 ? (
+                                    this.state.selectDocs.map((doc, index) => (
+                                        <tr key={index}>
+                                            <td>{doc.name}</td>
+                                            <td>{doc.base_dir}</td>
+                                            <td>
+                                                <Button
+                                                    label=""
+                                                    style={buttonStyleRemove}
+                                                    icon="pi pi-trash"
+                                                    onClick={() => {
+                                                        this.removeDocFromSelection(doc);
+                                                        this.refreshDocList();
+                                                    }}
+                                                />
+                                            </td>
+                                        </tr>
+                                    ))
+                                ) : (
+                                    <tr>
+                                        <td colSpan="3">No selected documents.</td>
+                                    </tr>
+                                )}
+                            </tbody>
+                        </table>
+                    </div>
+                    <div className='startAnalysis_btn'>
+                        <Button
+                            label="Start Analysis"
+                            onClick={this.startAnalysis}
+                            style={{ width: '50%', marginTop: '10px' }} // Full width button
+                        />
+                    </div>
+                    <div className='progressBar'>
+                        {this.state.progress !== null && (
+                            <div className="progress-bar">
+                                <div style={{ width: `${this.state.progress}%` , color: 'black'}}></div>
+                            </div>
+                        )}
+                    </div>
                 </div>
 
                 <div className='graph_dep pageStandard'>
-                    {filteredDocs.length ? <Graph centralNode={this.state.componentId["artifact_id"]} nodes={filteredDocs} /> : <p>No dependencies found to visualize.</p>}
+                    {filteredDocs.length > 0 ? (
+                        <Graph centralNode={this.state.componentId["artifact_id"]} nodes={filteredDocs} />
+                    ) : (
+                        <p>No dependencies found to visualize.</p>
+                    )}
                 </div>
-
+                <Divider />
                 <footer>
-                    <div className='footer'><p className='copyright'>Version 1.0</p></div>
+                    <div className='footer'>
+                        <p className='copyright'>Version 1.0</p>
+                    </div>
                 </footer>
             </>
         );

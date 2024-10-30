@@ -21,7 +21,8 @@ export class Home extends Component {
             url: docRoutes.getData(),
             url2: docRoutes.getComponentinfo(),
             url3: docRoutes.getDepentComponent(),
-            selectDocs: []  // Initialize selectDocs in state
+            selectDocs: [],  // Initialize selectDocs in state
+            progress: 0
         };
     }
 
@@ -91,7 +92,7 @@ export class Home extends Component {
             if (progress === 100) {
                 clearInterval(this.progressInterval);
             }
-        }, 1000);
+        }, 1000); // Poll every second
     };
 
 
@@ -281,7 +282,7 @@ export class Home extends Component {
                     <div className='progressBar'>
                         {this.state.progress !== null && (
                             <div className="progress-bar">
-                                <div style={{ width: `${this.state.progress}%` }}></div>
+                                <div style={{ width: `${this.state.progress}%` , color: 'black'}}></div>
                             </div>
                         )}
                     </div>

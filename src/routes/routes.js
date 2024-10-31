@@ -5,12 +5,15 @@ const routes = {
     getDataBykeyword: function getDataByKeyword(keyword) {
         return "http://localhost:1337/data?keyword="+keyword;
     },
-    getComponentinfo: function getComponentinfo() {
-        return "http://localhost:1337/componentinfo";
-    },
     getDepentComponent: function getDepentComponent() {
-        return "http://localhost:1337/graph/basedir";
+        return "http://localhost:1337/dependency";
     },
+    startAnalysis: function startAnalysis() {
+        return "http://localhost:1337/analyze";
+    },
+    getProgress: function getProgress () {
+        return "http://localhost:1337/progress";
+    }
 };
 
 module.exports = routes;

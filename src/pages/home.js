@@ -4,106 +4,279 @@ import { Divider } from 'primereact/divider';
 import "primereact/resources/themes/lara-light-indigo/theme.css";
 import "primereact/resources/primereact.min.css";
 import "primeicons/primeicons.css";
-import { DataScroller } from 'primereact/datascroller';
+import { buttonStyleSearch } from '../style/style';
+import { buttonStyleRemove } from '../style/style';
 import { Button } from 'primereact/button';
-import Graph from './graph';
-import { ProgressSpinner } from 'primereact/progressspinner';
+import { DataScroller } from 'primereact/datascroller';
+import { ProgressSpinner } from 'primereact/progressspinner'
 
-const docRoutes = require("../routes/routes");
+const api = require("../routes/routes");
 
 export class Home extends Component {
     constructor(props) {
-        super(props);
+        super(props); // Needs to be called for advoing bugs whit 'this.props'
         this.state = {
+            keywords: "",
             docs: [],
-            filteredDocs: [],
-            keyword: "",
-            componentId: {},
-            url: docRoutes.getData(),
-            url2: docRoutes.getComponentinfo(),
-            url3: docRoutes.getDepentComponent(),
-            selectDocs: [],  // Initialize selectDocs in state
+            selectDocs: [],
+            btnAnalysisControl: false,
             progress: null,
-            circularProgress:false,
         };
-        this.progressInterval = null;
+        this.socket = null;
     }
 
     async componentDidMount() {
-        this.refreshDocList();
+        this.fetchDocs();
+        this.setupWebSocket();
     }
 
-
-    async refreshDocList() {
-        if (!this.state.url) {
-            console.error("No URL to fetch data from.");
-            return;
+    componentWillUnmount() {
+        if (this.socket) {
+            this.socket.close();  // Clean up WebSocket connection on unmount
         }
+    }
 
+    setupWebSocket = () => {
+        this.socket = new WebSocket("ws://localhost:1337");
+
+        this.socket.onmessage = (event) => {
+            const data = JSON.parse(event.data);
+            if (data.progress) {
+                this.setState({ progress: data.progress });
+
+                console.log(data.progress)
+                if (data.progress === 100) {
+                    this.setState({ btnAnalysisControl: false, showResult: true });
+                    this.socket.close();  // Close WebSocket once progress reaches 100%
+                }
+            }
+        };
+        this.socket.onopen = () => {
+            console.log("WebSocket connection established");
+        };
+
+        this.socket.onclose = () => {
+            console.log("WebSocket connection closed");
+            this.setState({ btnAnalysisControl: false });
+        };
+
+        this.socket.onerror = (error) => {
+            console.error("WebSocket error:", error);
+        };
+    };
+
+    render() {
+        return (
+            // Navbar
+            <>
+                {/*Navbar*/}
+                <nav className="navbar bg-light">
+                    <div className="container-fluid">
+                        <span className="navbar-brand mb-0 h1">DepVisual</span>
+                    </div>
+                </nav>
+                {/*Components list*/}
+                <div className='pageStandard'>
+                    {/*title*/}
+                    <h5>Components</h5>
+                    <Divider />
+                    <div className='space'></div>
+
+                    {/*search bar*/}
+                    <div className="container">
+                        <div className="row">
+                            <div className="col-8 d-flex align-items-center">
+                                <label htmlFor="title">Enter a keyword </label>
+                                <input
+                                    type="text"
+                                    className="form-control mr-2"
+                                    id="ex3"
+                                    placeholder="e.g., recharge-battery"
+                                    value={this.state.keywords}
+                                    onChange={async (event) => {
+                                        this.setState({
+                                            keywords: event.target.value
+                                        });
+                                    }}
+                                />
+                                <div className='horizontal_space'></div>
+                                <Button
+                                    icon="pi pi-search"
+                                    className='p-button-primary'
+                                    style={buttonStyleSearch}
+                                    onClick={
+                                        async (event) => {
+                                            event.preventDefault();
+                                            if (!this.state.keywords.trim()) {
+                                                alert("Please enter a keyword before searching.");
+                                                return;
+                                            }
+                                            await this.searchDocsByKeywords(this.state.keywords)
+                                            //console.log(this.state.docs)
+                                        }
+                                    }
+                                    disabled={this.state.docs.length === 0} // Disable button if docs is empty
+                                />
+                            </div>
+                        </div>
+                    </div>
+                    <div className='space'></div>
+
+                    {/*the list*/}
+
+                    <div className='bg-light'>
+                        <div className="datascroller-demo">
+                            <div className="card">
+                                {this.state.docs.length > 0 ? (
+                                    <DataScroller
+                                        value={this.state.docs}
+                                        className="sep"
+                                        itemTemplate={this.tableDocs}
+                                        rows={500}
+                                        inline
+                                        scrollHeight="600px"
+                                        header="List of components"
+                                    />
+                                ) : (
+                                    <p>No components found.</p>  // Show message if docs are empty
+                                )}
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                <div className='space'></div>
+
+                {/*Analysis part*/}
+                <div className='depAnalyse pageStandard'>
+                    <h5>Dependency analysis</h5>
+                    <Divider />
+                    {/*Selected components list*/}
+                    <div className='space'></div>
+                    <div style={{ maxHeight: '500px', overflowY: 'scroll' }}>
+                        <table className="table">
+                            <thead>
+                                <tr>
+                                    <th>Name</th>
+                                    <th>Base Directory</th>
+                                    <th>Action</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {this.state.selectDocs.length > 0 ? (
+                                    this.state.selectDocs.map((doc, index) => (
+                                        <tr key={index}>
+                                            <td>{doc.name}</td>
+                                            <td>{doc.base_dir}</td>
+                                            <td>
+                                                <Button
+                                                    label=""
+                                                    style={buttonStyleRemove}
+                                                    icon="pi pi-trash"
+                                                    onClick={() => {
+                                                        this.removeDocFromSelection(doc);
+                                                        this.fetchDocs();
+                                                    }}
+                                                />
+                                            </td>
+                                        </tr>
+                                    ))
+                                ) : (
+                                    <tr>
+                                        <td colSpan="3">No selected documents.</td>
+                                    </tr>
+                                )}
+                            </tbody>
+                        </table>
+                    </div>
+
+                    {/*Start analysis btn*/}
+                    <div className='startAnalysis_btn'>
+                        {this.state.btnAnalysisControl ?
+                            (
+                                <div>
+                                    <ProgressSpinner />
+                                </div>
+                            ) :
+                            (
+                                <Button
+                                    label="Start Analysis"
+                                    onClick={() => {
+                                        if (this.state.selectDocs.length === 0) {
+                                            alert("Please select a component before analyzing.");
+                                            return;
+                                        }
+                                        this.startAnalysis();
+                                        this.setState({ btnAnalysisControl: true })
+                                    }}
+                                    style={{ width: '50%', marginTop: '10px' }} // Full width button
+                                />
+                            )
+                        }
+
+
+                    </div>
+                    <div className='space'></div>
+                    <div className="progress-section">
+                        {this.state.progress !== null && (
+                            <div className="progress-bar" style={{ width: '100%', marginTop: '10px', border: '1px solid #ccc' }}>
+                                <div
+                                    style={{
+                                        width: `${this.state.progress}%`,
+                                        backgroundColor: this.state.progress < 50 ? 'red' : this.state.progress < 100 ? 'yellow' : 'green',
+                                        height: '15px',
+                                        transition: 'width 0.3s ease'
+                                    }}
+                                />
+                            </div>
+                        )}
+                    </div>
+                </div>
+
+            </>
+        );
+    }
+
+    fetchDocs = async () => {
         try {
-            const res = await fetch(this.state.url);
-            const data = await res.json();
-            this.setState({ docs: data });
-
-            const res2 = await fetch(this.state.url2);
-            const data2 = await res2.json();
-            console.log("Fetched Component ID:", data2);
-
-            const res3 = await fetch(this.state.url3);
-            const data3 = await res3.json();
-            this.setState({ filteredDocs: data3 });
-
-            this.setState({ componentId: data2 });
+            const response = await fetch(api.getData());
+            const data = await response.json();
+            this.setState({ docs: data })
         } catch (error) {
             console.error("Error fetching data:", error);
         }
     }
 
-    // Add doc to selected docs list and trigger re-render
-    addDocToSelection = (doc) => {
-        this.setState((prevState) => ({
-            selectDocs: [...prevState.selectDocs, doc]
-        }));
-    };
-
-    removeDocFromSelection = (docToRemove) => {
-        this.setState((prevState) => ({
-            selectDocs: prevState.selectDocs.filter(doc => doc !== docToRemove)  // Remove the selected doc
-        }));
-    };
+    searchDocsByKeywords = async (keywords) => {
+        try {
+            const response = await fetch(api.getDataBykeyword(keywords));
+            const data = await response.json();
+            this.setState({ docs: data })
+        } catch (error) {
+            console.error("Error fetching data:", error);
+        }
+    }
 
     startAnalysis = async () => {
-        const response = await fetch("http://localhost:1337/analyze", {
+        this.setState({ progress: null, btnAnalysisControl: true }); // Reset progress and button control
+
+        // Reinitialize WebSocket for a new analysis
+        this.setupWebSocket();
+        const response = await fetch(api.startAnalysis(), {
             method: "PUT",
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify(this.state.selectDocs)
         });
-    
+
         if (response.ok) {
-            this.pollProgress();
+            console.log("Analysis request started");
+            // WebSocket will handle real-time progress updates
         } else {
             console.error("Analysis request failed");
+            this.setState({ btnAnalysisControl: false }); // Reset button if analysis fails
         }
     };
-    
-    pollProgress = () => {
-        this.progressInterval = setInterval(async () => {
-            try {
-                const response = await fetch("http://localhost:1337/progress");
-                const data = await response.json(); // Ensure correct destructuring
-                this.setState({ progress: data.progress }); // Set progress correctly
-    
-                if (data.progress === 100) {
-                    clearInterval(this.progressInterval);
-                    this.setState({circularProgress: false})
-                }
-            } catch (error) {
-                console.error("Error fetching progress:", error);
-                clearInterval(this.progressInterval);
-            }
-        }, 1000);
-    };
-    
+
+
 
     // Render the docs in a table or message if no docs found
     tableDocs = (data) => {
@@ -135,7 +308,7 @@ export class Home extends Component {
                             onClick={() => {
                                 if (!isSelected) {
                                     this.addDocToSelection(data);
-                                    this.refreshDocList();
+                                    this.fetchDocs();
                                 }
                             }}
                             disabled={isSelected}  // Disable button if selected
@@ -149,204 +322,21 @@ export class Home extends Component {
         );
     };
 
+    // Add doc to selected docs list and trigger re-render
+    addDocToSelection = (doc) => {
+        this.setState((prevState) => ({
+            selectDocs: [...prevState.selectDocs, doc]
+        }));
+    };
 
-    render() {
-        const { docs, filteredDocs, keyword } = this.state;
-        const buttonStyleRemove = {
-            backgroundColor: 'red', // Green when selected, blue otherwise
-            color: 'white', // Text color
-            border: 'none', // Remove default border
-            cursor: 'pointer', // Pointer cursor on hover
-            borderRadius: '10%'
-        };
-        const buttonStyleSearch = {
-            with: '40px',
-            height: '40px',
-            borderRadius: '50%'
-        }
+    // Remove the selected doc
+    removeDocFromSelection = (docToRemove) => {
+        this.setState((prevState) => ({
+            selectDocs: prevState.selectDocs.filter(doc => doc !== docToRemove)
+        }));
+    };
 
-        return (
-            <>
-                <nav className="navbar bg-light">
-                    <div className="container-fluid">
-                        <span className="navbar-brand mb-0 h1">DepVisual</span>
-                    </div>
-                </nav>
 
-                <div className='pageStandard'>
-                    <h5>Components</h5>
-                    <Divider />
-                    <div className='space'></div>
-                    <div>
-                        <div className="container">
-                            <div className="row">
-                                <div className="col-8 d-flex align-items-center">
-                                    <label htmlFor="title">Enter a keyword </label>
-                                    <input
-                                        type="text"
-                                        className="form-control mr-2"
-                                        id="ex3"
-                                        placeholder="e.g., recharge-battery"
-                                        value={keyword}
-                                        onChange={async (event) => {
-                                            this.setState({
-                                                keyword: event.target.value
-                                            });
-                                        }}
-                                    />
-                                    <div className='horizontal_space'></div>
-                                    <Button
-                                        icon="pi pi-search"
-                                        className='p-button-primary'
-                                        style={buttonStyleSearch}
-                                        onClick={
-                                            async (event) => {
-                                                event.preventDefault();
-                                                if (!keyword.trim()) {
-                                                    alert("Please enter a keyword before searching.");
-                                                    return;
-                                                }
-                                                await this.setState({
-                                                    url: docRoutes.getDataBykeyword(keyword)
-                                                });
-                                                this.refreshDocList();
-                                            }
-                                        }
-                                        disabled={docs.length === 0} // Disable button if docs is empty
-                                    />
-
-                                </div>
-                            </div>
-                        </div>
-                    </div>
-                    <div className='space'></div>
-                </div>
-                <div className='content bg-light'>
-                    <div className="datascroller-demo">
-                        <div className="card">
-                            {docs.length > 0 ? (
-                                <DataScroller
-                                    value={docs}
-                                    className="sep"
-                                    itemTemplate={this.tableDocs}
-                                    rows={500}
-                                    inline
-                                    scrollHeight="600px"
-                                    header="List of components"
-                                />
-                            ) : (
-                                <p>No components found.</p>  // Show message if docs are empty
-                            )}
-                        </div>
-                    </div>
-                    <div className='space'></div>
-                </div>
-
-                <div className='depAnalyse pageStandard'>
-                    <h5>Dependency analysis</h5>
-                    <Divider />
-                    <div style={{ maxHeight: '500px', overflowY: 'scroll' }}>
-                        <table className="table">
-                            <thead>
-                                <tr>
-                                    <th>Name</th>
-                                    <th>Base Directory</th>
-                                    <th>Action</th>
-                                </tr>
-                            </thead>
-                            <tbody>
-                                {this.state.selectDocs.length > 0 ? (
-                                    this.state.selectDocs.map((doc, index) => (
-                                        <tr key={index}>
-                                            <td>{doc.name}</td>
-                                            <td>{doc.base_dir}</td>
-                                            <td>
-                                                <Button
-                                                    label=""
-                                                    style={buttonStyleRemove}
-                                                    icon="pi pi-trash"
-                                                    onClick={() => {
-                                                        this.removeDocFromSelection(doc);
-                                                        this.refreshDocList();
-                                                    }}
-                                                />
-                                            </td>
-                                        </tr>
-                                    ))
-                                ) : (
-                                    <tr>
-                                        <td colSpan="3">No selected documents.</td>
-                                    </tr>
-                                )}
-                            </tbody>
-                        </table>
-                    </div>
-                    <div className='startAnalysis_btn'>
-                        {this.state.circularProgress ?
-                        (
-                            <Button
-                            className="p-button-secondary" // PrimeReact button color
-                            style={{ width: '50%', marginTop: '10px', height: '58px', cursor: 'not-allowed' }}
-                            disabled
-                        >
-                            <ProgressSpinner 
-                                style={{ width: '24px', height: '24px' }} 
-                                strokeWidth="4" 
-                                fill="var(--surface-ground)" 
-                                animationDuration=".5s" 
-                            />
-                        </Button>  
-                        ) : (
-                            <Button
-                            label="Start Analysis"
-                            onClick={() => {
-                                if (this.state.selectDocs.length === 0) {
-                                    alert("Please select a component before analyzing.");
-                                    return;
-                                }
-                                this.startAnalysis(); 
-                                this.setState({ circularProgress: true})
-                            }}
-                            style={{ width: '50%', marginTop: '10px' }} // Full width button
-                        />
-                        )
-                    }
-                        
-                    </div>
-                    <div className='space'></div>
-                    <div className='progressBar'>
-                        {this.state.progress !== null && (
-                            <div className="progress-bar" style={{ width: '100%', marginTop: '10px', border: '1px solid #ccc' }}>
-                                <div
-                                    style={{
-                                        width: `${this.state.progress}%`,
-                                        backgroundColor: this.state.progress < 50 ? 'red' : this.state.progress < 100 ? 'yellow' : 'green',
-                                        height: '15px',
-                                        transition: 'width 0.3s ease'
-                                    }}
-                                />
-                            </div>
-                        )}
-
-                    </div>
-                </div>
-
-                <div className='graph_dep pageStandard'>
-                    {filteredDocs.length > 0 ? (
-                        <Graph centralNode={this.state.componentId["artifact_id"]} nodes={filteredDocs} />
-                    ) : (
-                        <p>No dependencies found to visualize.</p>
-                    )}
-                </div>
-                <Divider />
-                <footer>
-                    <div className='footer'>
-                        <p className='copyright'>Version 1.0</p>
-                    </div>
-                </footer>
-            </>
-        );
-    }
 }
 
 export default Home;

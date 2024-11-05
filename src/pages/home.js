@@ -9,6 +9,7 @@ import { buttonStyleRemove } from '../style/style';
 import { Button } from 'primereact/button';
 import { DataScroller } from 'primereact/datascroller';
 import { ProgressSpinner } from 'primereact/progressspinner'
+import Graph from './graph';
 
 const api = require("../routes/routes");
 
@@ -21,12 +22,18 @@ export class Home extends Component {
             selectDocs: [],
             btnAnalysisControl: false,
             progress: null,
+            filteredDocs: [],
+            showResult: false,
+            showResultComplete: false,
+            showGraphModal: false,
         };
         this.socket = null;
+
     }
 
     async componentDidMount() {
         this.fetchDocs();
+        this.fetchFilteredDocs();
         this.setupWebSocket();
     }
 
@@ -57,7 +64,7 @@ export class Home extends Component {
 
         this.socket.onclose = () => {
             console.log("WebSocket connection closed");
-            this.setState({ btnAnalysisControl: false });
+            this.setState({ btnAnalysisControl: false, showResult: true });
         };
 
         this.socket.onerror = (error) => {
@@ -231,6 +238,73 @@ export class Home extends Component {
                         )}
                     </div>
                 </div>
+                {/*Resuts part*/}
+                <div className='pageStandard_graph'>
+                    {/*Show result btn*/}
+                    <div style={{ textAlign: 'center' }}>
+                        {this.state.showResult && (
+                            <span
+                                onClick={() => {
+                                    this.fetchFilteredDocs();
+                                    this.setState({ showResultComplete: true })
+                                }}
+                                style={{
+                                    display: 'block',
+                                    color: '#007bff',
+                                    cursor: 'pointer',
+                                    textDecoration: 'underline',
+                                    fontSize: '1.2rem'
+                                }}
+                            >
+                                Show Result
+                            </span>
+                        )}
+                    </div>
+                    <div className='space'></div>
+                    {/*Show the result*/}
+                    {this.state.showResultComplete && (
+                        <div className="results-section" style={{ textAlign: 'center' }}>
+                            {Object.entries(this.state.filteredDocs).map(([key, dependencies], index) => {
+                                const totalDeps = dependencies.length;
+                                const usedDeps = dependencies.filter(dep => dep.maven_analyse_used).length;
+                                const unusedDeps = totalDeps - usedDeps;
+
+
+                                return (<div key={index} className="" style={{ marginBottom: '50px' }}>
+                                    <div style={{ textAlign: 'left' }}><h6>Dependency graph for {key}</h6>
+                                        <p>Total: {totalDeps}, Used: {usedDeps}, Unused: {unusedDeps}</p>
+                                        <div className='space'></div>
+                                    </div>
+
+                                    <div style={{
+                                        display: 'flex',
+                                        justifyContent: 'center',
+                                        alignItems: 'center',
+                                        marginTop: '20px' // Adjust this for more space above the graph
+                                    }}>
+                                        {!(totalDeps === 0) ? <Graph centralNode={key} nodes={dependencies} /> : <div><p>No dependencies found to display.</p></div>}
+                                    </div>
+                                    <div className='moreSpace'></div>
+                                </div>);
+
+                            })}
+                            {/* Display message if filteredDocs is empty */}
+                            {!this.state.showResultComplete && (
+                                <div>
+                                    <p>No dependencies found to display.</p>
+                                </div>
+                            )}
+                        </div>
+                    )}
+                </div>
+                {/*Page's footer*/}
+                <div className='space'></div>
+                <Divider />
+                <footer>
+                    <div className='footer'>
+                        <p className='copyright'>Version 1.0</p>
+                    </div>
+                </footer>
 
             </>
         );
@@ -256,8 +330,25 @@ export class Home extends Component {
         }
     }
 
+    fetchFilteredDocs = async () => {
+        try {
+            const response = await fetch(api.getDepentComponent());
+            const data = await response.json();
+            this.setState({ filteredDocs: data })
+
+            console.log(data)
+        } catch (error) {
+            console.error("Error fetching data:", error);
+        }
+    }
+
     startAnalysis = async () => {
-        this.setState({ progress: null, btnAnalysisControl: true }); // Reset progress and button control
+        this.setState({
+            progress: null,
+            btnAnalysisControl: true,
+            showResult: false,
+            showResultComplete: false,
+        }); // Reset progress and button control
 
         // Reinitialize WebSocket for a new analysis
         this.setupWebSocket();
@@ -335,7 +426,6 @@ export class Home extends Component {
             selectDocs: prevState.selectDocs.filter(doc => doc !== docToRemove)
         }));
     };
-
 
 }
 
